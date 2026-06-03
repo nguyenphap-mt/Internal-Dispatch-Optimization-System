@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dispatch-pg
+    environment:
+      POSTGRES_USER: dispatch
+      POSTGRES_PASSWORD: dispatch
+      POSTGRES_DB: dispatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dispatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./apps/backend
+    container_name: dispatch-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: dispatch
+      DB_PASSWORD: dispatch
+      DB_NAME: dispatch
+      DB_SYNCHRONIZE: "true"
+      JWT_SECRET: dispatch-dev-secret
+      CORS_ORIGIN: "*"
+    ports:
+      - "3000:3000"
+    # Seed (idempotent) then start the API.
+    command: sh -c "node dist/database/seed.js && node dist/main.js"
+
+  frontend:
+    build:
+      context: ./apps/frontend
+    container_name: dispatch-frontend
+    depends_on:
+      - backend
+    ports:
+      - "4200:80"
+
+volumes:
+  pgdata:
